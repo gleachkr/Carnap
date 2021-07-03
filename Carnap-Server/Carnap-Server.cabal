@@ -110,13 +110,13 @@ library
                  , th-utilities
                  , shakespeare                   >= 2.0        && < 2.1
                  , monad-control                 >= 0.3        && < 1.1
-                 , wai-extra                     >= 3.0        && < 3.1
+                 , wai-extra                     >= 3.0        && < 3.2
                  , yaml                          >= 0.8        && < 0.12
                  , http-conduit                  >= 2.3        && < 2.4
                  , directory                     >= 1.1        && < 1.4
                  , warp                          >= 3.0        && < 3.4
                  , data-default
-                 , aeson                         >= 0.6        && < 1.5
+                 , aeson                         >= 0.6        && < 1.6
                  , conduit                       >= 1.0        && < 2.0
                  , monad-logger                  >= 0.3        && < 0.4
                  , fast-logger                   >= 2.2        && < 3.1
@@ -146,8 +146,8 @@ library
                  , tz
                  , tzdata
                  , random
-                 , cryptonite >= 0.26 && < 0.27
-                 , base64-bytestring >= 1.0.0 && < 1.1
+                 , cryptonite >= 0.26 && < 0.28
+                 , base64-bytestring >= 1.0.0 && < 1.2
                  , clock
                  , wai-middleware-throttle >= 0.3.0.0 && < 0.4
                  , Carnap-Client

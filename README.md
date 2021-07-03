@@ -94,63 +94,68 @@ Nix, by default, reads `shell.nix` if you call it through `nix-shell`, and
 attribute names being used with `-A` for the `nix-build` commands, but not for
 `nix-shell`.
 
-### Build the front end
-
-This builds the Carnap-GHCJS package under `ghcjs` along with its dependencies.
-(note: takes about 9-10GB of RAM at the final linking stage). This is often
-faster than building it with Cabal if you only intend to work on Carnap-Server,
-since the CI build server produces cached built versions of the client side
-components, allowing the build step to be skipped.
-
-```
-$ nix-build -j4 -A client -o client-out
-```
-
-### Build a release version of Carnap-Server with Nix
-
-This package is what is included in the Docker image.
-
-This will also automatically build the client and any dependencies if
-necessary.
-
-```
-$ nix-build -j4 -A server -o server-out
-```
-
-### Get a shell with GHC, for server development
+### I'd like to work on Carnap-Server
 
 This creates a shell in an environment providing the required dependencies for
 Carnap-Server, along with development tools such as `cabal`, `ghc` and others
 appropriate for server side development. Nix shells use versions of Haskell
 components and tools isolated from those available on the host system.
 
-This requires a client be built, either [using Nix](#Build-the-front-end) or
-using Cabal (see below).
+**NOTE**: Building the client side, which is done in the `nix-shell` invocation
+the first time, takes about 12GB of memory. If you would like to use a built
+version from CI, pass `--arg useClientFromCi true` to `nix-shell` and
+`nix-build` (if you are building a server to run).
 
-Using `make` aliases:
-
-```
-$ make shell-ghc
-[nix-shell:Carnap]$ make build-ghc
-[nix-shell:Carnap]$ make run
-```
-
-You should then be able to access your development server at
-`http://localhost:3000`
-
-To perform the process manually, first make sure to copy
-`Carnap-Server/config/settings-example.yml` to
-`Carnap-Server/config/settings.yml`, and to create a data directory (in the
-below, called `dataroot`). Then run:
+You can run the server from a fresh checkout with:
 
 ```
+# we use -j4 here to use 4 jobs which will go faster, but potentially use more
+# RAM to compile. If it hits an out of memory condition, consider reducing this
+# to `-j1`.
+
+$ nix-shell -j4
+
+# copy the default settings and make a dataroot (you only have to do this once)
+[nix-shell]$ cp Carnap-Server/config/settings{-example,}.yml
+[nix-shell]$ mkdir dataroot
+
+# build a client (only has to be done once; you may want to use the option to
+# grab it from CI)
+[nix-shell]$ nix-build -A client -o client-out
+
+# to just run the server
+[nix-shell]$ make run
+
+# this is the fastest way to check for compile errors without actually compiling
+[nix-shell]$ cabal repl Carnap-Server
+
+# you can also build it into dist-newstyle if you wish...
+[nix-shell]$ make build-ghc
+```
+
+You can alternatively do this manually with cabal:
+
+<details>
+<summary>
+Steps to do it manually with cabal
+</summary>
+<pre><code>
 $ nix-shell
 [nix-shell:Carnap]$ cabal new-build -f dev all
 [nix-shell:Carnap]$ cd Carnap-Server
 [nix-shell:Carnap-Server]$ APPROOT="http://localhost:3000" DATAROOT="../dataroot" BOOKROOT="../Carnap-Book/" cabal run -f dev Carnap-Server
-```
+</code></pre>
+</details>
 
-### Get a shell with GHCJS, for client side development
+Then go to http://localhost:3000 and login with an arbitrary email address.
+After logging in, go to http://localhost:3000/admin_promote to become an
+administrator.
+
+Now that you are an administrator, you can become an instructor at
+https://localhost:3000/master_admin.
+
+
+### I'd like to work on the client side proof checker
 
 As in the section above, this will make a shell with Haskell development tools
 and the required dependencies to work on Carnap components. This one provides
@@ -170,27 +175,7 @@ $ nix-shell --arg ghcjs true
 $ cabal --project-file=cabal-ghcjs.project --builddir=dist-ghcjs new-build all
 ```
 
-### Building Docker images
-
-If you'd like to build an image locally for development/testing, run:
-
-```
-nix-build release.nix -A docker -o docker-out
-```
-
-then load it into the docker daemon with:
-
-```
-docker image load -i docker-out
-```
-
-It will be available under the image name `carnap:latest`.
-
-The docker building setup does not require KVM support in the host kernel, and
-if you wish to build your images on a machine without it, run nix-build with
-the added argument `--arg hasKvm false`.
-
-### Haskell Language Server
+### Server development: Haskell Language Server
 
 The Nix infrastructure for Carnap provides the Haskell Language Server by
 default for development on Carnap-Server, allowing for completion, type
@@ -243,6 +228,48 @@ carnap$ ln -s /path/to/your/clone/of/Carnap-Documentation ./dataroot/srv
 
 You can then browse to `http://localhost:3000/srv` to have an immediate preview
 of the documentation as you work on it.
+
+--------------------------
+
+## Other development workflows
+
+### Build a release version of Carnap-Server with Nix
+
+This package is what is included in the Docker image and is used by the [UBC
+NixOps scripts](https://github.com/ubc-carnap-team/carnap-nixops). It is
+intended for production use and has compiler optimizations and Google login
+enabled.
+
+It will build more slowly than `make run` from above, and is thus probably not
+what you want.
+
+This will also automatically build the client and any dependencies if
+necessary.
+
+```
+$ nix-build -j4 -A server -o server-out
+```
+
+### Building Docker images
+
+If you'd like to build an image locally for development/testing, run:
+
+```
+nix-build release.nix -A docker -o docker-out
+```
+
+then load it into the docker daemon with:
+
+```
+docker image load -i docker-out
+```
+
+It will be available under the image name `carnap:latest`.
+
+The docker building setup does not require KVM support in the host kernel, and
+if you wish to build your images on a machine without it, run nix-build with
+the added argument `--arg hasKvm false`.
+
 
 ## Maintainer information
 

@@ -11,6 +11,10 @@ in newpkgs: oldpkgs: {
     enableLibraryProfiling = false;
   });
 
+  # ghcjs-base is broken and there is no fix on their side. downgrade primitive
+  # to pre 0.7.0.0
+  primitive = oldpkgs.callHackage "primitive" "0.6.4.0" {};
+
   # nixpkgs has overridden this one extra spicily to test on !i686
   # which ironically includes us, in spite of us blocking tests.
   # Override it harder.

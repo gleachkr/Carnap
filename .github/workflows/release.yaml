@@ -1,17 +1,11 @@
-name: Automatically build Carnap and Carnap-GHCJS
+name: build client js for download
 on:
   push:
-    branches:
-      - '**'
-  pull_request:
+    tags:
+      - 'v*'
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # TODO: reinstate Ubuntu once we figure out how to make it stop hitting
-        # OOM. macOS seems to crash a lot less, if ever.
-        os: [macos-latest]
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
     - uses: cachix/install-nix-action@v12
@@ -38,7 +32,33 @@ jobs:
         signingKey: '${{ secrets.ALT_CACHIX_SIGNING_KEY }}'
 
     # run it in serial because we are getting attacked by the OOM killer lol
-    - run: nix-build -A client
+    - run: nix-build -A client -o client-out
+
+    - run: |
+        mkdir -p client-js/bin/
+        cp -R client-out/bin/AllActions.jsexe client-js/bin/AllActions.jsexe
+        chmod -R u+w client-js
+        tar cvzf client-js.tar.gz client-js
+
+    # upload an artefact of the client js so people can avoid building it.
+    - uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+      with:
+        tag_name: '${{ github.ref }}'
+        release_name: 'GHCJS Release: ${{ github.ref}}'
+        draft: false
+        prerelease: false
+
+    - uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+      with:
+        upload_url: '${{ steps.create_release.outputs.upload_url }}'
+        asset_path: ./client-js.tar.gz
+        asset_name: client-js.tar.gz
+        asset_content_type: application/gzip
 
     - run: nix-build -A server
 

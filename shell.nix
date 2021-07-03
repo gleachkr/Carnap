@@ -1,6 +1,6 @@
-args@{ghcjs ? false, hls ? !ghcjs, ...}:
+args@{ghcjs ? false, hls ? !ghcjs, useClientFromCi ? false, ...}:
 let
-  importArgs = removeAttrs (args // { inherit hls; }) ["ghcjs"];
+  importArgs = removeAttrs (args // { inherit hls useClientFromCi; }) ["ghcjs"];
   def = import ./default.nix importArgs;
   inherit (def) ghcShell ghcjsShell;
 in

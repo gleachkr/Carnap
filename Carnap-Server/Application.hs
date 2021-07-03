@@ -100,6 +100,10 @@ makeFoundation appSettings = do
                         (pgConnStr  $ appDatabaseConf appSettings)
                         (pgPoolSize $ appDatabaseConf appSettings)
 
+    -- TODO: sqlite migrations are broken because persistent is not setting
+    -- stuff properly because of https://github.com/yesodweb/persistent/issues/1125
+    -- also relevant, https://github.com/yesodweb/persistent/issues/1126
+    --
     -- Perform database migration using our application's logging settings.
     runLoggingT (runSqlPool (runMigration migrateAll) pool) logFunc
 

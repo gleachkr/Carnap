@@ -1,34 +1,40 @@
-{ ghcjsVer ? "ghcjs",
-  ghcVer ? "ghc884",
+args@{ useClientFromCi ? false,
   profiling ? false,
   hls ? false,
 }:
 let
+  ghcjsVer = "ghcjs";
+  ghcVer = "ghc8104";
   sources = import ./nix/sources.nix;
 
-  # We have this bifurcated setup because of a nixpkgs bug causing ghcjs to not
-  # work on unstable:
-  # https://github.com/NixOS/nixpkgs/issues/95931
-  # However! We also want to provide a haskell-language-server, which landed in
-  # nixpkgs after 20.03. So, the server is on unstable and the client side is
-  # on 20.03. Duplication: likely pretty much just ghc.
+  # This is separate since ghcjs often gets broken randomly on nixpkgs
+  # unstable, so we always want to use a release version.
+  # However, the versions of haskell packages in stable are often too old to
+  # use for us. Thus, we want to have a separate one.
   nixpkgs-stable = import sources.nixpkgs-stable {
-      config = {
-        # yes, packages are broken, but we fix them ;-)
-        allowBroken = true;
-      };
-      overlays = [
-        (import ./nix/gitignore.nix { })
-        (import ./nix/compose-haskell-overlays.nix {
-          ghcVer = ghcjsVer;
-          overlays = [
-            (import ./client.nix { })
-          ];
-        })
-      ];
+    config = {
+      # yes, packages are broken, but we fix them ;-)
+      allowBroken = true;
     };
+    overlays = [
+      (import ./nix/gitignore.nix { })
+      (import ./nix/compose-haskell-overlays.nix {
+        ghcVer = ghcjsVer;
+        overlays = [
+          (import ./client.nix { })
+        ];
+      })
+    ];
+  };
 
-  client = nixpkgs-stable.haskell.packages."${ghcjsVer}".Carnap-GHCJS;
+  client-ci = nixpkgs.fetchzip {
+    url = "https://github.com/ubc-carnap-team/Carnap/releases/download/v0.1/client-js.tar.gz";
+    sha256 = "026n880c88i44mva40qj0nkalmh1an8shwz8mdpf2yn9kx3z8200";
+  };
+  client = if useClientFromCi then
+    client-ci
+  else
+    nixpkgs-stable.haskell.packages."${ghcjsVer}".Carnap-GHCJS;
 
   nixpkgs = import sources.nixpkgs {
       config = {
@@ -40,7 +46,9 @@ let
         (import ./nix/compose-haskell-overlays.nix {
           inherit ghcVer;
           overlays = [
-            (import ./server.nix { inherit profiling client; inherit (sources) persistent; })
+            (import ./server.nix {
+              inherit profiling client;
+            })
           ];
         })
       ];

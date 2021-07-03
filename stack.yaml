@@ -2,30 +2,20 @@ flags: {}
 extra-package-dbs: []
 extra-deps:
     - yesod-markdown-0.12.6.3
-    - yesod-auth-oauth2-0.6.1.3
-    - hoauth2-1.8.9
+    - yesod-auth-oauth2-0.6.1.7
     # - uri-bytestring-aeson-0.1.0.8
-    - diagrams-builder-0.8.0.5
     - tz-0.1.3.4@sha256:bd311e202b8bdd15bcd6a4ca182e69794949d3b3b9f4aa835e9ccff011284979,5086
     - th-utilities-0.2.4.0@sha256:ba19cd8441aa43dbaed40e9055bb5a7cbd7cf9e154f5253c6bf9293af8b1f96b,1869
     - haskell-src-exts-simple-1.22.0.0
     - haskell-src-exts-1.22.0
     - wai-middleware-throttle-0.3.0.1@sha256:8da81c156abbcaee3bdda60763bb9780ae1b9ff447bd5580202c0e0f5f8f7bcb,2522
     - token-bucket-0.1.0.1@sha256:ef80a31e7f4f794e3686eb405a49afc663535dd3a11c012a002a7bacce897da6,1912
-    - git: https://github.com/yesodweb/persistent.git
-      commit: 1cdadc10405e9e3b1e0e73e2c1d6ec84eed69a53
-      subdirs:
-          - persistent
-          - persistent-sqlite
-          - persistent-postgresql
-          - persistent-template
-          - persistent-qq
-    - lti13-0.2.0.0
-    - yesod-auth-lti13-0.2.0.0
+    - lti13-0.2.0.1
+    - yesod-auth-lti13-0.2.0.1
     - oidc-client-0.5.1.0
 
-# :( persistent bug fix requires a git version, which means we have to turn off
-# version checking in every yesod project
+# this is due to a wrong max base bound on token-bucket. strangely, its hackage
+# package says it works on < 4.15, so does stack have some old cached metadata?
 allow-newer: true
 
 packages:
@@ -35,4 +25,4 @@ packages:
 #resolver: lts-6.25
 #resolver: lts-12.26
 #resolver: lts-14.27
-resolver: lts-16.11
+resolver: lts-17.4
