@@ -34,5 +34,17 @@
         "type": "tarball",
         "url": "https://github.com/yesodweb/persistent/archive/1cdadc10405e9e3b1e0e73e2c1d6ec84eed69a53.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "truth-tree": {
+        "branch": "nix-building",
+        "description": "Truth Tree Widget for Carnap",
+        "homepage": "",
+        "owner": "ubc-carnap-team",
+        "repo": "Rudolf",
+        "rev": "08bdb487ad403e8a94820fe6e32aa83509f0a6c1",
+        "sha256": "1pv4fb18mg4870wn4a4lvg9hdbrgyc7ah3931x579zajnkx53y9h",
+        "type": "tarball",
+        "url": "https://github.com/ubc-carnap-team/Rudolf/archive/08bdb487ad403e8a94820fe6e32aa83509f0a6c1.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }

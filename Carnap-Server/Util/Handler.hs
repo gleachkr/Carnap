@@ -1,18 +1,37 @@
 module Util.Handler where
 
-import Import
-import qualified Data.CaseInsensitive as CI
-import qualified Data.Text.Encoding as TE
-import Yesod.Markdown
-import Text.Pandoc (Meta, PandocError, MetaValue(..),Inline(..), WriterOptions(..), WrapOption(..), readerExtensions,   Pandoc(..), getTemplate, compileTemplate, lookupMeta, runIO)
-import Text.Pandoc.Walk (Walkable, walk)
-import Text.Hamlet (hamletFile)
-import TH.RelativePaths (pathRelativeToCabalPackage)
-import System.Directory (removeFile, doesFileExist, createDirectoryIfMissing)
-import Util.Data
-import Util.Database
-import System.FilePath
-import Text.Blaze.XHtml5 (ToMarkup, Markup)
+import qualified Data.CaseInsensitive   as CI
+import qualified Data.Text.Encoding     as TE
+import           Import
+import           System.Directory       (createDirectoryIfMissing,
+                                         doesFileExist, removeFile)
+import           System.FilePath
+import           Text.Blaze.XHtml5      (Markup, ToMarkup)
+import           Text.Hamlet            (hamletFile)
+import           Text.Julius            (juliusFile)
+import           Text.Pandoc            (Inline (..), Meta, MetaValue (..),
+                                         Pandoc (..), PandocError,
+                                         WrapOption (..), WriterOptions (..),
+                                         compileTemplate, getTemplate,
+                                         lookupMeta, readerExtensions, runIO)
+import           Text.Pandoc            (Block)
+import           Text.Pandoc.Walk       (Walkable, walk)
+import           TH.RelativePaths       (pathRelativeToCabalPackage)
+import           Util.Data
+import           Util.Database
+import           Yesod.Core.Types       (GWData (..), tellWidget)
+import           Yesod.Markdown
+
+import           Filter.CounterModelers
+import           Filter.ProofCheckers
+import           Filter.Qualitative
+import           Filter.RenderFormulas
+import           Filter.Sequent
+import           Filter.SynCheckers
+import           Filter.Translate
+import           Filter.TreeDeduction
+import           Filter.TruthTables
+import           Filter.TruthTrees
 
 minimalLayout :: ToMarkup a => a -> WidgetFor site ()
 minimalLayout c = [whamlet|
@@ -33,6 +52,44 @@ cleanLayout widget = do
         pc <- widgetToPageContent $(widgetFile "default-layout")
         withUrlRenderer $(hamletFile =<< pathRelativeToCabalPackage "templates/default-layout-wrapper.hamlet")
 
+addDocScripts :: (MonadWidget m, HandlerSite m ~ App) => m ()
+addDocScripts = do
+    addScript $ StaticR js_proof_js
+    addScript $ StaticR js_popper_min_js
+    addScript $ StaticR ghcjs_rts_js
+    addScript $ StaticR ghcjs_allactions_lib_js
+    addScript $ StaticR ghcjs_allactions_out_js
+    addScript $ StaticR klement_proofs_js
+    addScript $ StaticR klement_syntax_js
+
+    addStylesheet $ StaticR css_tree_css
+    addStylesheet $ StaticR css_proof_css
+    addStylesheet $ StaticR css_exercises_css
+    addStylesheet $ StaticR klement_proofs_css
+    addStylesheet $ StaticR truth_tree_lib_css
+
+    addScript $ StaticR ghcjs_allactions_runmain_js
+    addInlineScript $(juliusFile =<< pathRelativeToCabalPackage "templates/createTrees.julius")
+
+    where
+    -- stuffs a script into the bottom of the page body like 'addScript'
+    addInlineScript s =
+        liftWidget . tellWidget $ GWData mempty mempty mempty mempty mempty (Just s) mempty
+
+-- * Pandoc
+allFilters :: Block -> Block
+allFilters = makeTreeDeduction
+             . makeCounterModelers
+             . makeProofChecker
+             . makeQualitativeProblems
+             . makeSequent
+             . makeSynCheckers
+             . makeTranslate
+             . makeTreeDeduction
+             . makeTruthTables
+             . makeTruthTrees
+             . renderFormulas
+
 retrievePandocVal :: MonadHandler m => Maybe MetaValue -> m (Maybe [Text])
 retrievePandocVal metaval = case metaval of
                         Just (MetaInlines ils) -> return $ Just (catMaybes (map fromStr ils))
@@ -41,7 +98,7 @@ retrievePandocVal metaval = case metaval of
                         Nothing -> return Nothing
                         x -> setMessage (toHtml ("bad yaml metadata: " ++ show x)) >> return Nothing
     where fromStr (Str x) = Just x
-          fromStr _ = Nothing
+          fromStr _       = Nothing
 
 retrievePandocValPure :: Monad m => Maybe MetaValue -> m (Maybe [Text])
 retrievePandocValPure metaval = case metaval of
@@ -51,7 +108,7 @@ retrievePandocValPure metaval = case metaval of
                         Nothing -> return Nothing
                         _ -> return Nothing
     where fromStr (Str x) = Just x
-          fromStr _ = Nothing
+          fromStr _       = Nothing
 
 fileToHtml :: Walkable a Pandoc => (a -> a) -> FilePath -> IO (Either String (Either PandocError Html, Meta))
 fileToHtml filters path = do Markdown md <- markdownFromFile path

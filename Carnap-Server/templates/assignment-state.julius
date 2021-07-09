@@ -9,7 +9,7 @@ var CarnapServerAPI = {
     },
     assignment: {
         /* toMS to get milliseconds for JS */
-        dueDate: #{jsMaybe (show . (toMS . (round . utcTimeToPOSIXSeconds))) (assignmentMetadataDuedate val)},
+        dueDate: #{jsMaybe toJsTime (assignmentMetadataDuedate val)},
         pointValue: #{jsMaybe show (assignmentMetadataPointValue val)},
         totalProblems: #{jsMaybe show (assignmentMetadataTotalProblems val)},
         description: #{jsMaybe show (assignmentMetadataDescription val)},

@@ -44,9 +44,9 @@ data APIKeyScope = APIKeyScopeRoot
     deriving (Show, Read, Eq)
 derivePersistField "APIKeyScope"
 
-data AvailabilityStatus = ViaPassword Text 
+data AvailabilityStatus = ViaPassword Text
                         | HiddenViaPassword Text
-                        | ViaPasswordExpiring Text Int 
+                        | ViaPasswordExpiring Text Int
                         | HiddenViaPasswordExpiring Text Int
     deriving (Show, Read, Eq, Generic)
 instance ToJSON AvailabilityStatus
@@ -66,8 +66,17 @@ availabilityMinutes (ViaPasswordExpiring _ min) = Just min
 availabilityMinutes (HiddenViaPasswordExpiring _ min) = Just min
 availabilityMinutes _ = Nothing
 
+sanitizeForJS :: String -> String
+sanitizeForJS ('\n':xs) = '\\' : 'n' : sanitizeForJS xs
+sanitizeForJS ('\\':xs) = '\\' : '\\' : sanitizeForJS xs
+sanitizeForJS ('\'':xs) = '\\' : '\'' : sanitizeForJS xs
+sanitizeForJS ('"':xs)  = '\\' : '"' : sanitizeForJS xs
+sanitizeForJS ('\r':xs) = sanitizeForJS xs
+sanitizeForJS (x:xs) = x : sanitizeForJS xs
+sanitizeForJS [] = []
+
 chapterOfProblemSet :: IntMap Int
-chapterOfProblemSet = IM.fromList 
+chapterOfProblemSet = IM.fromList
     [ (1,1)
     , (2,2)
     , (3,2)
@@ -87,7 +96,7 @@ chapterOfProblemSet = IM.fromList
     , (17,12)
     ]
 
-carnapPandocExtensions = extensionsFromList 
+carnapPandocExtensions = extensionsFromList
         [ Ext_raw_html
         , Ext_markdown_in_html_blocks
         , Ext_auto_identifiers
@@ -139,8 +148,8 @@ displayProblemData (TruthTableDataOpts t _ opts') = maybe (rewriteText opts t) p
                `mplus` (intercalate "," . map (rewriteWith opts . show) <$> (readMaybe s :: Maybe [PureForm]))
                `mplus` case readMaybe s :: Maybe ([PureForm],[PureForm]) of
                                  Nothing -> Nothing
-                                 Just (fs,gs) -> Just $ intercalate "," (map (rewriteWith opts . show) fs) 
-                                                      ++ " || " 
+                                 Just (fs,gs) -> Just $ intercalate "," (map (rewriteWith opts . show) fs)
+                                                      ++ " || "
                                                       ++ intercalate "," (map (rewriteWith opts . show) gs)
           s = unpack t
 displayProblemData (TranslationData t _) = "-"

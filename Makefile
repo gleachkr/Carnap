@@ -45,7 +45,11 @@ build-docker:
 
 devel: build-ghcjs run
 
-run:
+APPROOT := "http://localhost:3000"
+DATAROOT := "../dataroot"
+BOOKROOT := "../Carnap-Book/"
+
+run: client-out truth-tree-out
 ifeq ($(origin NIX_STORE),undefined)
 	nix-shell --run 'make run'
 else
@@ -57,10 +61,18 @@ else
 		cabal run $(CABALFLAGS) Carnap-Server $(CONFIGFILE)
 endif
 
+# builds the client files
+client-out:
+	nix-build -A client -o client-out
+
+# builds the truth tree module
+truth-tree-out:
+	nix-build -A truth-tree -o truth-tree-out
+
 shell-ghc:
 	nix-shell
 
-build-ghc:
+build-ghc: client-out truth-tree-out
 ifeq ($(origin NIX_STORE),undefined)
 	nix-shell --run 'make build-ghc'
 else

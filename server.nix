@@ -1,4 +1,4 @@
-{ client, persistent, withHoogle ? true, profiling ? false }:
+{ client, truth-tree, persistent, withHoogle ? true, profiling ? false }:
 { nixpkgs }:
 let
   inherit (nixpkgs.lib) gitignoreSource;
@@ -80,6 +80,11 @@ newpkgs: oldpkgs: {
         cp ${client.out}/bin/AllActions.jsexe/out.js static/ghcjs/allactions/
         cp ${client.out}/bin/AllActions.jsexe/lib.js static/ghcjs/allactions/
         cp ${client.out}/bin/AllActions.jsexe/runmain.js static/ghcjs/allactions/
+
+        find static/truth-tree -type l -delete
+        cp ${truth-tree.out}/dist/lib.css static/truth-tree/
+        cp ${truth-tree.out}/dist/lib.js  static/truth-tree/
+
         echo ":: Adding a universal settings file"
         cp config/settings-example.yml config/settings.yml
         cp -r {config,static} $out/share
@@ -88,7 +93,7 @@ newpkgs: oldpkgs: {
 
       enableExecutableProfiling = profiling;
       enableLibraryProfiling = profiling;
-      buildDepends = [ book client ];
+      buildDepends = [ book client truth-tree ];
 
       isExecutable = true;
       # Carnap-Server has no tests/they are broken

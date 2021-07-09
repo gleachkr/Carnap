@@ -1,0 +1,8 @@
+if (document.TruthTrees && document.TruthTrees.length) {
+  const scriptTag = document.createElement("script");
+  scriptTag.src = "@{StaticR truth_tree_lib_js}";
+  scriptTag.onload = (_err) => {
+    return document.TruthTrees.forEach((args) => Rudolf.createTree(...args));
+  };
+  document.body.appendChild(scriptTag);
+}

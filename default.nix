@@ -29,6 +29,7 @@ let
     };
 
   client = nixpkgs-stable.haskell.packages."${ghcjsVer}".Carnap-GHCJS;
+  truth-tree = import sources.truth-tree { inherit nixpkgs; };
 
   nixpkgs = import sources.nixpkgs {
       config = {
@@ -40,7 +41,7 @@ let
         (import ./nix/compose-haskell-overlays.nix {
           inherit ghcVer;
           overlays = [
-            (import ./server.nix { inherit profiling client; inherit (sources) persistent; })
+            (import ./server.nix { inherit profiling truth-tree client ; inherit (sources) persistent; })
           ];
         })
       ];
@@ -63,7 +64,7 @@ let
   ]);
 
   in rec {
-    inherit nixpkgs nixpkgs-stable client;
+    inherit nixpkgs nixpkgs-stable client truth-tree;
     server = nixpkgs.haskell.packages."${ghcVer}".Carnap-Server;
 
     # a ghc-based shell for development of Carnap and Carnap-Server

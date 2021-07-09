@@ -1,30 +1,36 @@
-{-#LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Handler.Review (getReviewR, putReviewR, deleteReviewR) where
 
-import Import
-import Util.Data
-import Util.Assignment
-import Data.Map as M (fromList)
-import Data.Tree
-import Data.List (nub)
-import Filter.Util (sanitizeHtml)
-import Text.Read (readMaybe)
-import Yesod.Form.Bootstrap3
-import Carnap.Languages.PurePropositional.Syntax
-import Carnap.Languages.PureFirstOrder.Syntax
-import Carnap.Languages.PurePropositional.Logic (ofPropSys)
-import Carnap.Languages.PureFirstOrder.Logic (ofFOLSys)
-import Carnap.Languages.SetTheory.Logic (ofSetTheorySys)
-import Carnap.Languages.PureSecondOrder.Logic (ofSecondOrderSys)
-import Carnap.Languages.ModalPropositional.Logic (ofModalPropSys)
-import Carnap.Languages.DefiniteDescription.Logic.Gamut (ofDefiniteDescSys)
-import Carnap.Calculi.NaturalDeduction.Syntax (NaturalDeductionCalc(..))
-import Carnap.GHCJS.SharedTypes
-import Carnap.GHCJS.SharedFunctions (simpleCipher,simpleHash,inOpts)
+import           Import
+
+import           Data.List                                        (nub)
+import           Data.Map                                         as M (fromList)
+import           Data.Tree
+import           Filter.Util                                      (sanitizeHtml)
+import           Text.Blaze.Html5                                 (Markup)
+import           Text.Read                                        (readMaybe)
+import           Yesod.Form.Bootstrap3
+
+import           Carnap.Calculi.NaturalDeduction.Syntax           (NaturalDeductionCalc (..))
+import           Carnap.GHCJS.SharedFunctions                     (inOpts,
+                                                                   simpleCipher,
+                                                                   simpleHash)
+import           Carnap.GHCJS.SharedTypes
+import           Carnap.Languages.DefiniteDescription.Logic.Gamut (ofDefiniteDescSys)
+import           Carnap.Languages.ModalPropositional.Logic        (ofModalPropSys)
+import           Carnap.Languages.PureFirstOrder.Logic            (ofFOLSys)
+import           Carnap.Languages.PureFirstOrder.Syntax
+import           Carnap.Languages.PurePropositional.Logic         (ofPropSys)
+import           Carnap.Languages.PurePropositional.Syntax
+import           Carnap.Languages.PureSecondOrder.Logic           (ofSecondOrderSys)
+import           Carnap.Languages.SetTheory.Logic                 (ofSetTheorySys)
+import           Util.Assignment
+import           Util.Data
+import           Util.Handler                                     (addDocScripts)
 
 deleteReviewR :: Text -> Text -> Handler Value
-deleteReviewR coursetitle asgntitle = do
-        msg <- requireJsonBody :: Handler ReviewDelete
+deleteReviewR _coursetitle _asgntitle = do
+        msg <- requireCheckJsonBody :: Handler ReviewDelete
         case msg of
             DeleteProblem key -> do
                 runDB $ delete key
@@ -32,13 +38,13 @@ deleteReviewR coursetitle asgntitle = do
 
 putReviewR :: Text -> Text -> Handler Value
 putReviewR coursetitle asgntitle =
-        do Entity key val <- getAssignmentByCourse coursetitle asgntitle
+        do Entity key _val <- getAssignmentByCourse coursetitle asgntitle
            ((theUpdate,_),_) <- runFormPost (identifyForm "updateSubmission" $ updateSubmissionForm Nothing "" "")
            case theUpdate of
                FormSuccess (ident, serializeduid, extra) -> do
-                   success <- runDB $ do case readMaybe serializeduid of 
+                   success <- runDB $ do case readMaybe serializeduid of
                                                Just uid -> do msub <- getBy (UniqueProblemSubmission ident uid (Assignment (show key)))
-                                                              case msub of 
+                                                              case msub of
                                                                    Just (Entity k _) -> update k [ProblemSubmissionExtra =. Just extra] >> return True
                                                                    Nothing -> return False
                                                Nothing -> return False
@@ -47,7 +53,7 @@ putReviewR coursetitle asgntitle =
                (FormFailure s) -> returnJson ("error:" <> concat s :: Text)
 
 getReviewR :: Text -> Text -> Handler Html
-getReviewR coursetitle asgntitle = 
+getReviewR coursetitle asgntitle =
         do Entity key val <- getAssignmentByCourse coursetitle asgntitle
            unsortedProblems <- runDB $ selectList [ProblemSubmissionAssignmentId ==. Just key] []
            uidAndData <- runDB $ do let uids = nub $ map (problemSubmissionUserId . entityVal) unsortedProblems
@@ -56,32 +62,27 @@ getReviewR coursetitle asgntitle =
            let problems = sortBy theSorting unsortedProblems
                due = assignmentMetadataDuedate val
            defaultLayout $ do
-               addScript $ StaticR js_popper_min_js
-               addScript $ StaticR js_proof_js
-               addScript $ StaticR ghcjs_rts_js
-               addScript $ StaticR ghcjs_allactions_lib_js
-               addScript $ StaticR ghcjs_allactions_out_js
-               addStylesheet $ StaticR css_proof_css
-               addStylesheet $ StaticR css_exercises_css
+               addDocScripts
                $(widgetFile "review")
                addScript $ StaticR ghcjs_allactions_runmain_js
     where maybeLnSort (_,Nothing) (_,Nothing) = EQ
           maybeLnSort (_,Nothing) _ = LT
           maybeLnSort _ (_,Nothing) = GT
-          maybeLnSort (_,Just ud) (_,Just ud') = compare (userDataLastName $ entityVal ud) 
+          maybeLnSort (_,Just ud) (_,Just ud') = compare (userDataLastName $ entityVal ud)
                                                          (userDataLastName $ entityVal ud')
           theSorting p p' = scompare s s'
               where s = unpack . problemSubmissionIdent . entityVal $ p
                     s' = unpack . problemSubmissionIdent . entityVal $ p'
                     scompare a a' = case (break (== '.') a, break (== '.') a')  of
                                       ((h,[]),(h',[])) | compare (length h) (length h') /= EQ -> compare (length h) (length h')
-                                                       | compare h h' /= EQ -> compare h h' 
+                                                       | compare h h' /= EQ -> compare h h'
                                                        | otherwise -> EQ
                                       ((h,t), (h',t')) | compare (length h) (length h') /= EQ -> compare (length h) (length h')
-                                                       | compare h h' /= EQ -> compare h h' 
+                                                       | compare h h' /= EQ -> compare h h'
                                                        | otherwise -> scompare (drop 1 t) (drop 1 t')
 
-selectUser list = 
+selectUser :: (Foldable t, Show a) => t (a, Maybe (Entity UserData)) -> WidgetFor site ()
+selectUser list =
         [whamlet|
             <select#selectStudent class="form-control">
                 <option value="all">All Students
@@ -94,6 +95,12 @@ selectUser list =
                         <option value="#{show v}">unknown
         |]
 
+renderProblem
+    :: (IsMap map, MapValue map ~ Maybe (Entity UserData), ContainerKey map ~ Key User)
+    => Maybe UTCTime
+    -> map
+    -> Entity ProblemSubmission
+    -> WidgetFor App ()
 renderProblem due uidAndData (Entity key val) = do
         let ident = problemSubmissionIdent val
             uid = problemSubmissionUserId val
@@ -114,7 +121,7 @@ renderProblem due uidAndData (Entity key val) = do
                   | otherwise = 0
             awarded = maybe "0" show extra
             mailto email = sanitizeHtml email ++ "?subject=[Carnap-" ++ sanitizeHtml ident ++ "]"
-            template display = 
+            template display =
                 [whamlet|
                     <div.card.mb-3.#{isGraded} data-submission-uid="#{show uid}">
                         <div.card-body style="padding:20px">
@@ -151,7 +158,7 @@ renderProblem due uidAndData (Entity key val) = do
         case (problemSubmissionType val, problemSubmissionData val) of
             (Derivation, DerivationData goal der) -> template
                 [whamlet|
-                    <div data-carnap-system="prop" 
+                    <div data-carnap-system="prop"
                          data-carnap-options="resize"
                          data-carnap-type="proofchecker"
                          data-carnap-goal="#{goal}"
@@ -175,7 +182,7 @@ renderProblem due uidAndData (Entity key val) = do
                                                ++ if "guides" `inOpts` M.fromList opts then " guides" else ""
                       sys = maybe "prop" id $ lookup "system" (M.fromList opts)
                       guides = maybe "none" id $ lookup "guides" (M.fromList opts)
-                      formatContent c = maybe c id $ (ndNotation `ofPropSys` sys) 
+                      formatContent c = maybe c id $ (ndNotation `ofPropSys` sys)
                                              `mplus` (ndNotation `ofFOLSys` sys)
                                              `mplus` (ndNotation `ofSecondOrderSys` sys)
                                              `mplus` (ndNotation `ofSetTheorySys` sys)
@@ -202,7 +209,7 @@ renderProblem due uidAndData (Entity key val) = do
                          data-carnap-goal="#{formatContent (unpack goal)}">
                          #{renderTT tt}
                 |]
-                where tabletype = case lookup "tabletype" (M.fromList opts) of Just s -> s; Nothing -> checkvalidity goal 
+                where tabletype = case lookup "tabletype" (M.fromList opts) of Just s -> s; Nothing -> checkvalidity goal
                       ttsystem = case lookup "system" (M.fromList opts) of Just s -> s; Nothing -> "prop"
                       trueMark = case lookup "truemark" (M.fromList opts) of Just s -> s; Nothing -> "T"
                       falseMark = case lookup "falsemark" (M.fromList opts) of Just s -> s; Nothing -> "F"
@@ -256,8 +263,8 @@ renderProblem due uidAndData (Entity key val) = do
                                             "first-order" -> maybe c id $ ndNotation `ofFOLSys` sys <*> Just c
                                             "description" -> maybe c id $ ndNotation `ofDefiniteDescSys` sys <*> Just c
                       problem = case lookup "problem" (M.fromList opts) of Just s -> s ++ " : " ++ (formatContent $ unpack goal)
-                      sys = case lookup "system" (M.fromList opts) of 
-                                Just s -> s; 
+                      sys = case lookup "system" (M.fromList opts) of
+                                Just s -> s;
                                 Nothing -> if transtype == "prop" then "prop" else "firstOrder"
             (SequentCalc, SequentCalcData goal tree opts) -> template
                 [whamlet|
@@ -289,7 +296,7 @@ renderProblem due uidAndData (Entity key val) = do
                 |]
                 where qualtype = case lookup "qualitativetype" (M.fromList opts) of Just s -> s; Nothing -> "shortanswer"
                       content = case qualtype of
-                                    "shortanswer" -> unpack answer
+                                    "shortanswer"    -> unpack answer
                                     "multiplechoice" -> withChecked
                       withChecked = case lookup "content" (M.fromList opts) of
                                         Nothing -> "Error no content"
@@ -297,7 +304,7 @@ renderProblem due uidAndData (Entity key val) = do
                       processEntry l = case readMaybe l :: Maybe (Int, String) of
                                            Just (h,s) | s == unpack answer && h == simpleHash ('+':s) -> show (simpleHash ('+':s), s)
                                            Just (h,s) | s == unpack answer && h == simpleHash ('*':s) -> show (simpleHash ('+':s), s)
-                                           Just (h,s) | s == unpack answer -> show (simpleHash ('-':s), s)
+                                           Just (_h,s) | s == unpack answer -> show (simpleHash ('-':s), s)
                                            Just (h,s) | h == simpleHash ('-':s) -> show (simpleHash s, s)
                                            Just (h,s) | h == simpleHash ('+':s) -> show (simpleHash ('*':s), s)
                                            Just (h,s) -> show (h, s)
@@ -314,7 +321,7 @@ renderProblem due uidAndData (Entity key val) = do
                                         Nothing -> "Error no content"
                                         Just cnt -> unlines . map processEntry . lines . unpack $ cnt
                       tryMaybe (Just True) = True
-                      tryMaybe _ = False
+                      tryMaybe _           = False
                       processEntry l = case readMaybe l :: Maybe (Int, String) of
                                            Just (h,s) | h == simpleHash ('*':s) && tryMaybe (lookup s answer) -> show (simpleHash ('+':s), s)
                                            Just (h,s) | h == simpleHash ('+':s) && not (tryMaybe (lookup s answer)) -> show (simpleHash ('*':s), s)
@@ -344,9 +351,9 @@ renderProblem due uidAndData (Entity key val) = do
             _ -> return ()
     where renderTT tt = concat $ map renderRow tt
           renderRow row = map toval row ++ "\n"
-          toval (Just True) = 'T'
+          toval (Just True)  = 'T'
           toval (Just False) = 'F'
-          toval Nothing = '-'
+          toval Nothing      = '-'
           checkvalidity ct = if '⊢' `elem` ct then "validity" :: String else "simple" :: String
           renderCMPair (l,v) = l ++ ":" ++ v
           renderCM cm = unlines . map renderCMPair $ cm
@@ -357,19 +364,26 @@ renderProblem due uidAndData (Entity key val) = do
                   escape '\r' = "\\r"
                   escape '\f' = "\\f"
                   escape '\\' = "\\\\"
-                  escape '"' = "\\\""
-                  escape c = [c]
+                  escape '"'  = "\\\""
+                  escape c    = [c]
 
-          treeJSON (Node (l,r) f) = "{\"label\":\"" ++ escapeForJSON l 
+          treeJSON (Node (l,r) f) = "{\"label\":\"" ++ escapeForJSON l
                                   ++ "\",\"rule\":\"" ++ escapeForJSON r
-                                  ++ "\",\"forest\":[" 
+                                  ++ "\",\"forest\":["
                                   ++ intercalate "," (map treeJSON f)
                                   ++ "]}"
 
+updateSubmissionForm
+    :: (MonadHandler m, RenderMessage (HandlerSite m) FormMessage)
+    => Maybe Int
+    -> Text
+    -> String
+    -> Markup
+    -> MForm m (FormResult (Text, String, Int), WidgetFor (HandlerSite m) ())
 updateSubmissionForm extra ident uid = renderBootstrap3 BootstrapBasicForm $ (,,)
             <$> areq hiddenField "" (Just ident)
-            <*> areq hiddenField "" (Just uid) 
-            <*> areq scoreField scoreInput {fsAttrs = ("autocomplete","off") : fsAttrs scoreInput} 
+            <*> areq hiddenField "" (Just uid)
+            <*> areq scoreField scoreInput {fsAttrs = ("autocomplete","off") : fsAttrs scoreInput}
                                 (maybe (Just 0) Just extra)
     where scoreField = check validateScore intField
           validateScore s | s < 0 = Left ("Added credit must be a positive number." :: Text)

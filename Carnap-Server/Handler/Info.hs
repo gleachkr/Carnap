@@ -3,29 +3,18 @@ module Handler.Info where
 import           Import
 import           Settings.Runtime
 import           Text.Shakespeare.Text
---import Text.Hamlet
+import           Util.Handler          (addDocScripts)
 
 getInfoR :: Handler Html
 getInfoR = do
     instanceAdmin <- runDB getInstanceAdminEmail
 
     defaultLayout $ do
-        addScript $ StaticR js_proof_js
-        addScript $ StaticR js_popper_min_js
-        addScript $ StaticR ghcjs_rts_js
-        addScript $ StaticR ghcjs_allactions_lib_js
-        addScript $ StaticR ghcjs_allactions_out_js
-        addScript $ StaticR klement_proofs_js
-        addScript $ StaticR klement_syntax_js
+        addDocScripts
         setTitle "Carnap - About"
-        addStylesheet $ StaticR css_tree_css
-        addStylesheet $ StaticR css_proof_css
-        addStylesheet $ StaticR css_exercises_css
-        addStylesheet $ StaticR klement_proofs_css
 
         $(widgetFile "infopage")
         -- TODO : split out the stuff specifically relating to exercises
-        addScript $ StaticR ghcjs_allactions_runmain_js
 
 -- TODO remove submit option on these.
 checker :: Int -> Text -> Text -> Text -> Text -> Text -> HtmlUrl url

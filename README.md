@@ -39,26 +39,26 @@ The current development environment is based on [Nix](https://nixOS.org). For
 general background on Nix, take a look at
 [nixos.org/learn.html](https://nixos.org/learn.html) or [nix.dev](https://nix.dev).
 
+The Nix package manager runs on any Linux distribution or macOS and can be
+installed without disrupting the rest of your system.
+
 Building on Windows natively is not supported, however, Carnap works well in
 the [Windows Subsystem for Linux](https://aka.ms/wsl), and has been tested and
 confirmed working in [WSL 2](https://aka.ms/wsl2). The steps for Linux work
 as-written in WSL 2.
 
 Nix is used to speed up builds and avoid having to compile dependencies,
-instead using cached built versions from nixpkgs. It also makes it easy to
-[Dockerize](https://nixos.org/nixpkgs/manual/#sec-pkgs-dockerTools) (see also
-NixOps) and implement CI.
+instead using cached built versions from the NixOS build farm. It also makes it
+easy to [build lean Docker images](https://nixos.org/nixpkgs/manual/#sec-pkgs-dockerTools)
+and implement CI.
 
 Carnap has a GHCJS (client side) and a GHC (server side) part.
 
-Building Carnap-Server depends on the client side components being available at
-`client-out` or otherwise linked into its static folder. This will be handled
-automatically by the approaches to building the client listed below, but the
-client needs to be built before the server.
-
 Nix does not support incremental package builds, so the suggested development
-workflow is to use `cabal` in a shell. A `Makefile` has been provided to make
-this easier by shortening the commands needed to be typed.
+workflow is to use the standard Haskell build system `cabal` in a `nix-shell`.
+A `Makefile` has been provided to make this easier by shortening the commands
+needed to be typed. It will output the commands it runs, and you can also read
+the `Makefile` itself for more details.
 
 In this documentation, lines starting with `$` mean that the part after the `$`
 is run in a shell natively on your system. Lines starting with `[nix-shell]$`
@@ -94,94 +94,109 @@ Nix, by default, reads `shell.nix` if you call it through `nix-shell`, and
 attribute names being used with `-A` for the `nix-build` commands, but not for
 `nix-shell`.
 
-### Build the front end
-
-This builds the Carnap-GHCJS package under `ghcjs` along with its dependencies.
-(note: takes about 9-10GB of RAM at the final linking stage). This is often
-faster than building it with Cabal if you only intend to work on Carnap-Server,
-since the CI build server produces cached built versions of the client side
-components, allowing the build step to be skipped.
-
-```
-$ nix-build -j4 -A client -o client-out
-```
-
-### Build a release version of Carnap-Server with Nix
-
-This package is what is included in the Docker image.
-
-This will also automatically build the client and any dependencies if
-necessary.
-
-```
-$ nix-build -j4 -A server -o server-out
-```
-
-### Get a shell with GHC, for server development
+### I'd like to work on Carnap-Server
 
 This creates a shell in an environment providing the required dependencies for
 Carnap-Server, along with development tools such as `cabal`, `ghc` and others
 appropriate for server side development. Nix shells use versions of Haskell
-components and tools isolated from those available on the host system.
-
-This requires a client be built, either [using Nix](#Build-the-front-end) or
-using Cabal (see below).
-
-Using `make` aliases:
+components and tools isolated from those available on the host system, sort of
+like Python's `virtualenv`, but for Haskell packages, and in fact, the entire
+machine.
 
 ```
-$ make shell-ghc
-[nix-shell:Carnap]$ make build-ghc
+$ nix-shell
+[nix-shell:Carnap]$ # Run a development server
 [nix-shell:Carnap]$ make run
 ```
 
 You should then be able to access your development server at
-`http://localhost:3000`
+`http://localhost:3000`.
 
-To perform the process manually, first make sure to copy
-`Carnap-Server/config/settings-example.yml` to
-`Carnap-Server/config/settings.yml`, and to create a data directory (in the
-below, called `dataroot`). Then run:
+#### Next steps
 
-```
-$ nix-shell
-[nix-shell:Carnap]$ cabal new-build -f dev all
-[nix-shell:Carnap]$ cd Carnap-Server
-[nix-shell:Carnap-Server]$ APPROOT="http://localhost:3000" DATAROOT="../dataroot" BOOKROOT="../Carnap-Book/" cabal run -f dev Carnap-Server
-```
+To become an instructor, log in with the dummy login using an email you'll
+remember. Set your first name and last name. Then, go to
+<http://localhost:3000/admin_promote> and press the button. Your account will
+be promoted to administrator of the local instance.
 
-### Get a shell with GHCJS, for client side development
+From there, you can go to <http://localhost:3000/master_admin> and promote your
+account to instructor. You can log out and log back in with another email if
+you want to simulate a student, for example.
 
-As in the section above, this will make a shell with Haskell development tools
-and the required dependencies to work on Carnap components. This one provides
-the GHCJS tooling and dependencies for the client side.
+If you'd like to dig into the code,
+[Haskell Language Server](#Haskell-Language-Server) is highly recommended.
 
-Using `make` aliases:
+### I'd like to work on the GHCJS client side components of Carnap
 
-```
+This process will replace the symlink to the Nix-built client automatically
+built while working on the server with one to a `cabal`-built client, more
+suitable for development. You can delete `client-out` and `make run` will give
+you a Nix-built client again.
+
+You can get a shell with a `ghcjs` compiler like so:
+
+```bash
 $ make shell-ghcjs
+$ # This will invoke cabal to build the GHCJS components
 [nix-shell:Carnap]$ make build-ghcjs
 ```
 
-Manually:
+### I'd like to work on truth-tree/Rudolf
 
-```
-$ nix-shell --arg ghcjs true
-$ cabal --project-file=cabal-ghcjs.project --builddir=dist-ghcjs new-build all
+The truth tree components are built by Nix as well, in a nearly identical way
+to the client. If you'd like to replace them with a locally built one, replace
+the symlink with one pointing to a local checkout that's been built:
+
+Say, you have a checkout of [the repo](https://github.com/ubc-carnap-team/Rudolf/)
+at `~/dev/Rudolf` that you've already run `yarn install` and `yarn build-lib`
+in, you'd want to run, in your Carnap directory:
+
+```bash
+Carnap$ ln -sfn ~/dev/Rudolf ./truth-tree-out
 ```
 
-### Building Docker images
+If you'd like to go back to the Nix-built truth tree, just delete the
+`truth-tree-out` symlink.
+
+### Special build outputs
+
+#### Release builds
+
+If you'd like to build a release build of the Nix package, suitable for
+production, use:
+
+```bash
+$ nix-build -A server -o server-out
+```
+
+This builds the derivation at the attribute `server` of the attribute set
+returned by the function at the top level of `default.nix`. You can also invoke
+this function yourself if you want to use Carnap in a NixOps deployment, for
+example:
+
+```nix
+let carnap-server = (import ./carnap/default.nix {}).server;
+in {
+  # use it
+  # ...
+}
+```
+
+Here's a sample of
+[NixOps files using this for a deployment of Carnap at UBC](https://github.com/ubc-carnap-team/carnap-nixops/blob/49f1bf814d6e3466ca3ca1c1fc5e56fccbb5e76c/carnap.nix#L41-L73)
+
+#### Building Docker images
 
 If you'd like to build an image locally for development/testing, run:
 
 ```
-nix-build release.nix -A docker -o docker-out
+$ nix-build release.nix -A docker -o docker-out
 ```
 
 then load it into the docker daemon with:
 
 ```
-docker image load -i docker-out
+$ docker image load -i docker-out
 ```
 
 It will be available under the image name `carnap:latest`.
@@ -190,7 +205,7 @@ The docker building setup does not require KVM support in the host kernel, and
 if you wish to build your images on a machine without it, run nix-build with
 the added argument `--arg hasKvm false`.
 
-### Haskell Language Server
+#### Haskell Language Server
 
 The Nix infrastructure for Carnap provides the Haskell Language Server by
 default for development on Carnap-Server, allowing for completion, type
@@ -232,7 +247,7 @@ picks up the dependencies for Carnap-Server from Nix since it is run in a
 NOTE: `Carnap-Server/config/settings.yml` needs to be present for Carnap-Server to
 work in HLS (just copy it from the example settings file).
 
-### Working on documentation locally
+#### Working on documentation locally
 
 The documentation is available using the `/srv/` route, which can also be used
 locally. If you want to do this, you can make a symbolic link like the following:

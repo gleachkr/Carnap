@@ -1,32 +1,17 @@
 module Handler.Serve where
 
-import Import
-import System.Directory (doesFileExist)
-import Yesod.Markdown
-import Data.List (nub)
-import Text.Pandoc (writerExtensions,writerWrapText, WrapOption(..), readerExtensions, Pandoc(..), lookupMeta)
-import Text.Pandoc.Walk (walkM, walk)
-import Text.Julius (juliusFile,rawJS)
-import TH.RelativePaths (pathRelativeToCabalPackage)
-import System.FilePath as FP (takeExtension,joinPath)
-import Util.Data
-import Util.Database
-import Util.Handler
-import Filter.SynCheckers
-import Filter.ProofCheckers
-import Filter.Translate
-import Filter.TruthTables
-import Filter.CounterModelers
-import Filter.Qualitative
-import Filter.Sequent
-import Filter.TreeDeduction
-import Filter.RenderFormulas
+import           Import
+import           System.Directory (doesFileExist)
+import           System.FilePath  as FP (joinPath, takeExtension)
+import           Text.Pandoc      (lookupMeta)
+import           Util.Handler
+
 
 -- XXX DRY up the boilplate that is shared by getDocumentDownload
 getServeR :: Text -> [Text] -> Handler Html
 getServeR base components = do app <- getYesod
                                let root = appDataRoot $ appSettings app
-                               path <- case components of 
+                               path <- case components of
                                          [] -> redirect $ ServeR base [pack "index.md"]
                                          _ -> return $ FP.joinPath (unpack root:"srv":unpack base:map unpack components)
                                liftIO (doesFileExist path) >>= \exists -> if exists then return () else notFound
@@ -50,27 +35,10 @@ getServeR base components = do app <- getYesod
                       mcss <- retrievePandocVal (lookupMeta "css" meta)
                       mjs <- retrievePandocVal (lookupMeta "js" meta)
                       defaultLayout $ do
-                          addScript $ StaticR js_proof_js
-                          addScript $ StaticR js_popper_min_js
-                          addScript $ StaticR ghcjs_rts_js
-                          addScript $ StaticR ghcjs_allactions_lib_js
-                          addScript $ StaticR ghcjs_allactions_out_js
+                          addDocScripts
                           maybe (pure [()]) (mapM (addScriptRemote))  mjs
-                          addStylesheet $ StaticR css_tree_css
-                          addStylesheet $ StaticR css_proof_css
-                          addStylesheet $ StaticR css_exercises_css
                           case mcss of
                               Nothing -> mapM addStylesheet [StaticR css_bootstrapextra_css]
                               Just ss -> mapM addStylesheetRemote ss
                           $(widgetFile "document")
                           addScript $ StaticR ghcjs_allactions_runmain_js
-
-allFilters = makeTreeDeduction
-             . makeSequent
-             . makeSynCheckers
-             . makeProofChecker
-             . makeTranslate
-             . makeTruthTables
-             . makeCounterModelers
-             . makeQualitativeProblems
-             . renderFormulas

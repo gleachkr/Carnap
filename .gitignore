@@ -37,6 +37,7 @@ tags
 TAGS
 client-out
 server-out
+truth-tree-out
 result
 cabal.project.local
 .cabal-fake-client-out/

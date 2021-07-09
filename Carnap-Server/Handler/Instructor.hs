@@ -1,28 +1,28 @@
-{-#LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Handler.Instructor where
 
-import Import
-import Util.Data
-import Util.Database
-import Util.LTI
-import Util.Grades
-import Util.API
-import Util.Handler
-import Control.Monad (fail)
-import Yesod.Form.Bootstrap3
-import Yesod.Form.Jquery
-import Text.Blaze.Html (Markup, toMarkup)
-import Text.Read (readMaybe)
-import qualified Data.Aeson as A
-import Data.Time
-import Data.Time.Zones
-import Data.Time.Zones.DB
-import Data.Time.Zones.All
-import qualified Data.IntMap (insert,fromList,toList,delete)
-import qualified Data.Map as M
-import qualified Data.Text as T
-import System.FilePath (takeExtension)
-import System.Directory (removeFile, doesFileExist, createDirectoryIfMissing)
+import           Control.Monad         (fail)
+import qualified Data.Aeson            as A
+import qualified Data.IntMap           (delete, fromList, insert, toList)
+import qualified Data.Map              as M
+import qualified Data.Text             as T
+import           Data.Time
+import           Data.Time.Zones
+import           Data.Time.Zones.All
+import           Data.Time.Zones.DB
+import           Import
+import           System.Directory      (doesFileExist, removeFile)
+import           System.FilePath       (takeExtension)
+import           Text.Blaze.Html       (Markup, toMarkup)
+import           Text.Read             (readMaybe)
+import           Util.API
+import           Util.Data
+import           Util.Database
+import           Util.Grades
+import           Util.Handler
+import           Util.LTI
+import           Yesod.Form.Bootstrap3
+import           Yesod.Form.Jquery
 
 putInstructorR :: Text -> Handler Value
 putInstructorR ident = do
@@ -108,12 +108,12 @@ putInstructorR ident = do
                  checkCourseOwnership ident cid
                  uid <- maybe (sendStatusJSON badRequest400 ("Could not read user key" :: Text)) return $ readMaybe uidstring
                  do runDB $ upsertBy (UniqueAccommodation cid uid)
-                                     (Accommodation cid uid 
-                                        (maybe 1 id mfactor) 
-                                        (maybe 0 id mextramin) 
+                                     (Accommodation cid uid
+                                        (maybe 1 id mfactor)
+                                        (maybe 0 id mextramin)
                                         (maybe 0 id mextrahours))
-                                     (maybe [] (\min -> [AccommodationTimeExtraMinutes =. min]) mextramin ++ 
-                                      maybe [] (\fac -> [AccommodationTimeFactor =. fac]) mfactor ++ 
+                                     (maybe [] (\min -> [AccommodationTimeExtraMinutes =. min]) mextramin ++
+                                      maybe [] (\fac -> [AccommodationTimeFactor =. fac]) mfactor ++
                                       maybe [] (\hours-> [AccommodationDateExtraHours =. hours]) mextrahours)
                  returnJson ("updated!" :: Text)
             (_,_,_,_,FormSuccess (uidstring, aid, day, mtime)) -> do
@@ -130,14 +130,14 @@ putInstructorR ident = do
             (FormMissing,FormMissing,FormMissing,FormMissing,FormMissing) -> sendStatusJSON badRequest400 ("Form Missing" :: Text)
             (form1,form2,form3,form4,form5) -> sendStatusJSON badRequest400 ("errors: " <> errorsOf form1 <> errorsOf form2 <> errorsOf form3 <> errorsOf form4 <> errorsOf form5)
                 where errorsOf (FormFailure s) = concat s <> ", "
-                      errorsOf _ = ""
+                      errorsOf _               = ""
 
 deleteInstructorR :: Text -> Handler Value
 deleteInstructorR ident = do
     requireReferral (InstructorR ident)
     msg <- requireCheckJsonBody :: Handler InstructorDelete
     case msg of
-      DeleteAssignment aid -> do 
+      DeleteAssignment aid -> do
            asgn <- runDB (get aid) >>= maybe (sendStatusJSON notFound404 ("Couldn't get assignment" :: Text)) pure
            let cid = assignmentMetadataCourse asgn
            checkCourseOwnership ident cid
@@ -146,14 +146,14 @@ deleteInstructorR ident = do
                if courseTextBook course == Just aid then update cid [CourseTextBook =. Nothing] else return ()
                deleteCascade aid
            returnJson ("Assignment deleted" :: Text)
-      DeleteProblems coursename setnum -> do 
+      DeleteProblems coursename setnum -> do
            Entity cid theclass <- runDB (getBy $ UniqueCourse coursename) >>= maybe (sendStatusJSON notFound404 ("Couldn't get course" :: Text)) pure
            checkCourseOwnership ident cid
            runDB $ case readAssignmentTable <$> courseTextbookProblems theclass of
                Just assign -> update cid [CourseTextbookProblems =. (Just $ BookAssignmentTable $ Data.IntMap.delete setnum assign)]
                Nothing -> sendStatusJSON notFound404 ("Couldn't get assignment table" :: Text)
            returnJson ("Assignment deleted" :: Text)
-      DeleteCourse coursename -> do 
+      DeleteCourse coursename -> do
            Entity cid _ <- runDB (getBy $ UniqueCourse coursename) >>= maybe (sendStatusJSON notFound404 ("No course to delete, for some reason." :: Text)) pure
            checkCourseOwnership ident cid
            runDB $ do
@@ -161,7 +161,7 @@ deleteInstructorR ident = do
                mapM_ (\s -> update (entityKey s) [UserDataEnrolledIn =. Nothing]) studentsOf
                deleteCascade cid
            returnJson ("Class Deleted"::Text)
-      DeleteDocument fn -> do 
+      DeleteDocument fn -> do
           datadir <- appDataRoot <$> (appSettings <$> getYesod)
           runDB $ do
                usr <- getBy (UniqueUser ident) >>= maybe (sendStatusJSON notFound404 ("Couldn't get user by ident" :: Text)) pure
@@ -176,15 +176,15 @@ deleteInstructorR ident = do
                       if fe then removeFile (datadir </> "documents" </> unpack ident </> unpack fn)
                             else return ()
           returnJson (fn ++ " deleted")
-      DropStudent uid -> do 
+      DropStudent uid -> do
           Entity udid ud <- (runDB $ getBy $ UniqueUserData uid) >>= maybe (sendStatusJSON notFound404 ("Couldn't get student to drop" :: Text)) pure
-          maybe (return ()) (checkCourseOwnership ident) $ userDataEnrolledIn ud 
+          maybe (return ()) (checkCourseOwnership ident) $ userDataEnrolledIn ud
           name <- runDB $ do
               update udid [UserDataEnrolledIn =. Nothing]
               return (userDataFirstName ud <> " " <> userDataLastName ud)
           returnJson ("Dropped " <> name)
       DeleteToken tokid -> do
-          cid <- runDB $ do 
+          cid <- runDB $ do
               tok <- get tokid >>= maybe (sendStatusJSON notFound404 ("Couldn't find token" :: Text)) pure
               asgn <- get (assignmentAccessTokenAssignment tok) >>= maybe (sendStatusJSON notFound404 ("Couldn't find token" :: Text)) pure
               return $ assignmentMetadataCourse asgn
@@ -215,7 +215,7 @@ postInstructorR ident = do
     ((frombookrslt,_),_)   <- runFormPost (identifyForm "setBookAssignment" $ setBookAssignmentForm activeClasses)
     ((instructorrslt,_),_) <- runFormPost (identifyForm "addCoinstructor" $ addCoInstructorForm instructors ("" :: String))
     ((newapikeyrslt,_),_)  <- runFormPost (identifyForm "createAPIKey" createAPIKeyForm)
-    case assignmentrslt of 
+    case assignmentrslt of
         FormSuccess postedAssignment ->
             do let Entity cid theclass = instructorAssignCourse postedAssignment
                    Entity docId theDoc = instructorAssignFile postedAssignment
@@ -231,9 +231,9 @@ postInstructorR ident = do
                    theassigner = mciid
                    thename = documentFilename theDoc
                currentTime <- liftIO getCurrentTime
-               asgned <- runDB $ selectList [AssignmentMetadataCourse ==. cid] []
+
                case instructorAssignPassword postedAssignment of
-                   Nothing | instructorAssignHidden postedAssignment == Just True || instructorAssignTimeLimit postedAssignment /= Nothing 
+                   Nothing | instructorAssignHidden postedAssignment == Just True || instructorAssignTimeLimit postedAssignment /= Nothing
                            -> setMessage "Hidden and time-limited assignments must be password protected"
                    _ -> do success <- runDB $ insertUnique $ AssignmentMetadata
                                                 { assignmentMetadataDocument = docId
@@ -379,11 +379,11 @@ postInstructorQueryR ident = do
                                                   )
         QueryTokens uid cid -> do
             checkCourseOwnership ident cid
-            (toks, course) <- runDB $ do 
+            (toks, course) <- runDB $ do
                 toks <- selectList [AssignmentAccessTokenUser ==. uid] []
                 course <- get cid >>= maybe (sendStatusJSON notFound404 ("Could not find associated course" :: Text)) pure
                 return (toks, course)
-            let deletions = map (\(Entity k tok) -> 
+            let deletions = map (\(Entity k tok) ->
                                     ( assignmentAccessTokenAssignment tok
                                     , dateDisplay (assignmentAccessTokenCreatedAt tok) course
                                     , DeleteToken k)) toks
@@ -422,7 +422,7 @@ getInstructorR ident = do
                                                 , assignmentMetadataTitle v
                                                 , assignmentMetadataDate v
                                                 , assignmentMetadataCourse v
-                                                )) assignmentMetadata 
+                                                )) assignmentMetadata
             tagMap <- forM documents $ \doc -> do
                                      tags <- runDB $ selectList [TagBearer ==. entityKey doc] []
                                      return (entityKey doc, map (tagName . entityVal) tags)
@@ -460,7 +460,7 @@ data InstructorDelete = DeleteAssignment AssignmentMetadataId
                       | DeleteCourse Text
                       | DeleteDocument Text
                       | DropStudent UserId
-                      | DeleteToken AssignmentAccessTokenId 
+                      | DeleteToken AssignmentAccessTokenId
                       | DeleteCoInstructor CoInstructorId
     deriving Generic
 
@@ -479,34 +479,34 @@ instance ToJSON InstructorQuery
 
 instance FromJSON InstructorQuery
 
-data InstructorAssign = InstructorAssign 
-                      { instructorAssignFile :: Entity Document
-                      , instructorAssignTitle :: Maybe Text
-                      , instructorAssignCourse :: Entity Course
-                      , instructorAssignDue :: Maybe LocalTime
-                      , instructorAssignFrom :: Maybe LocalTime
-                      , instructorAssignTill :: Maybe LocalTime
-                      , instructorAssignRelease :: Maybe LocalTime
-                      , instructorAssignPointValue :: Maybe Int
+data InstructorAssign = InstructorAssign
+                      { instructorAssignFile         :: Entity Document
+                      , instructorAssignTitle        :: Maybe Text
+                      , instructorAssignCourse       :: Entity Course
+                      , instructorAssignDue          :: Maybe LocalTime
+                      , instructorAssignFrom         :: Maybe LocalTime
+                      , instructorAssignTill         :: Maybe LocalTime
+                      , instructorAssignRelease      :: Maybe LocalTime
+                      , instructorAssignPointValue   :: Maybe Int
                       , instructorAssignProblemCount :: Maybe Int
-                      , instructorAssignDescription :: Maybe Textarea
-                      , instructorAssignPassword :: Maybe Text
-                      , instructorAssignHidden :: Maybe Bool
-                      , instructorAssignTimeLimit :: Maybe Int
+                      , instructorAssignDescription  :: Maybe Textarea
+                      , instructorAssignPassword     :: Maybe Text
+                      , instructorAssignHidden       :: Maybe Bool
+                      , instructorAssignTimeLimit    :: Maybe Int
                       }
 
 data InstructorAssignUpdate = InstructorAssignUpdate
-                      { instructorAssignUpdateIdString :: String
-                      , instructorAssignUpdateDue :: Maybe LocalTime
-                      , instructorAssignUpdateFrom :: Maybe LocalTime
-                      , instructorAssignUpdateTill :: Maybe LocalTime
-                      , instructorAssignUpdateRelease :: Maybe LocalTime
-                      , instructorAssignUpdatePointValue :: Maybe Int
+                      { instructorAssignUpdateIdString     :: String
+                      , instructorAssignUpdateDue          :: Maybe LocalTime
+                      , instructorAssignUpdateFrom         :: Maybe LocalTime
+                      , instructorAssignUpdateTill         :: Maybe LocalTime
+                      , instructorAssignUpdateRelease      :: Maybe LocalTime
+                      , instructorAssignUpdatePointValue   :: Maybe Int
                       , instructorAssignUpdateProblemCount :: Maybe Int
-                      , instructorAssignUpdateDescription :: Maybe Textarea
-                      , instructorAssignUpdatePassword :: Maybe Text
-                      , instructorAssignUpdateHidden :: Maybe Bool
-                      , instructorAssignUpdateTimeLimit :: Maybe Int
+                      , instructorAssignUpdateDescription  :: Maybe Textarea
+                      , instructorAssignUpdatePassword     :: Maybe Text
+                      , instructorAssignUpdateHidden       :: Maybe Bool
+                      , instructorAssignUpdateTimeLimit    :: Maybe Int
                       }
 
 ------------------
@@ -554,24 +554,23 @@ uploadAssignmentForm classes docs extra = do
             (hiddRes,hiddView) <- mopt checkBoxField (bfs ("Hidden"::Text)) Nothing
             (limitRes,limitView) <- mopt intField (bfs ("Limit"::Text)) Nothing
             let packTime Nothing _ = Nothing
-                packTime (Just d) Nothing = Just $ LocalTime d (TimeOfDay 23 59 59) 
+                packTime (Just d) Nothing = Just $ LocalTime d (TimeOfDay 23 59 59)
                 packTime (Just d) (Just t) = Just $ LocalTime d t
-            let theRes = InstructorAssign 
-                                 <$> fileRes                                        -- instructorAssignFile :: Entity Document               
+            let theRes = InstructorAssign
+                                 <$> fileRes                                        -- instructorAssignFile :: Entity Document
                                  <*> titleRes                                       -- instructorAssignTitle :: Maybe Text
-                                 <*> classRes                                       -- instructorAssignCourse :: Entity Course               
+                                 <*> classRes                                       -- instructorAssignCourse :: Entity Course
                                  <*> (packTime <$> dueRes <*> duetimeRes)           -- instructorAssignDue :: Maybe LocalTime
                                  <*> (packTime <$> fromRes <*> fromtimeRes)         -- instructorAssignFrom :: Maybe LocalTime
                                  <*> (packTime <$> tillRes <*> tilltimeRes)         -- instructorAssignTill :: Maybe LocalTime
                                  <*> (packTime <$> releaseRes <*> releasetimeRes)   -- instructorAssignRelease :: Maybe LocalTime
-                                 <*> pointValueRes                                  -- instructorAssignPointValue :: Maybe Int               
-                                 <*> problemCountRes                                -- instructorAssignProblemCount :: Maybe Int             
-                                 <*> descRes                                        -- instructorAssignDescription :: Maybe Textarea         
-                                 <*> passRes                                        -- instructorAssignPassword :: Maybe Text                
-                                 <*> hiddRes                                        -- instructorAssignHidden :: Maybe Bool                  
-                                 <*> limitRes                                       -- instructorAssignTimeLimit :: Maybe Int                
-            let widget = do
-                [whamlet|
+                                 <*> pointValueRes                                  -- instructorAssignPointValue :: Maybe Int
+                                 <*> problemCountRes                                -- instructorAssignProblemCount :: Maybe Int
+                                 <*> descRes                                        -- instructorAssignDescription :: Maybe Textarea
+                                 <*> passRes                                        -- instructorAssignPassword :: Maybe Text
+                                 <*> hiddRes                                        -- instructorAssignHidden :: Maybe Bool
+                                 <*> limitRes                                       -- instructorAssignTimeLimit :: Maybe Int
+            let widget = [whamlet|
                 #{extra}
                 <h6>File to Assign
                 <div.row>
@@ -643,7 +642,7 @@ uploadAssignmentForm classes docs extra = do
             return (theRes,widget)
     where classnames = map (\theclass -> (courseTitle . entityVal $ theclass, theclass)) classes
           assignableDocs = filter isAssignable docs
-          isAssignable thedoc = let extension =  takeExtension . unpack . documentFilename . entityVal $ thedoc 
+          isAssignable thedoc = let extension =  takeExtension . unpack . documentFilename . entityVal $ thedoc
                                     in not (extension `elem` [".css",".js",".yaml",".png",".jpg",".jpeg",".gif",".svg",".pdf"])
           docnames = map (\thedoc -> (documentFilename . entityVal $ thedoc, thedoc)) assignableDocs
 
@@ -667,22 +666,21 @@ updateAssignmentForm extra = do
             (hiddRes,hiddView) <- mopt checkBoxField (bfs ("Hidden"::Text)) Nothing
             (limitRes,limitView) <- mopt intField (bfs ("Limit"::Text)) Nothing
             let packTime Nothing _ = Nothing
-                packTime (Just d) Nothing = Just $ LocalTime d (TimeOfDay 23 59 59) 
+                packTime (Just d) Nothing = Just $ LocalTime d (TimeOfDay 23 59 59)
                 packTime (Just d) (Just t) = Just $ LocalTime d t
-            let theRes = InstructorAssignUpdate 
-                             <$> assignmentRes                                  --instructorAssignUpdateIdString :: String                      
+            let theRes = InstructorAssignUpdate
+                             <$> assignmentRes                                  --instructorAssignUpdateIdString :: String
                              <*> (packTime <$> dueRes <*> duetimeRes)           --instructorAssignUpdateDue :: Maybe LocalTime
                              <*> (packTime <$> fromRes <*> fromtimeRes)         --instructorAssignUpdateFrom :: Maybe LocalTime
                              <*> (packTime <$> tillRes <*> tilltimeRes)         --instructorAssignUpdateTill :: Maybe LocalTime
                              <*> (packTime <$> releaseRes <*> releasetimeRes)   --instructorAssignUpdateRelease :: Maybe LocalTime
-                             <*> pointValueRes                                  --instructorAssignUpdatePointValue :: Maybe Int                 
-                             <*> problemCountRes                                --instructorAssignUpdateProblemCount :: Maybe Int               
-                             <*> descRes                                        --instructorAssignUpdateDescription :: Maybe Textarea           
-                             <*> passRes                                        --instructorAssignUpdatePassword :: Maybe Text                  
-                             <*> hiddRes                                        --instructorAssignUpdateHidden :: Maybe Bool                    
-                             <*> limitRes                                       --instructorAssignUpdateTimeLimit :: Maybe Int                  
-            let widget = do
-                [whamlet|
+                             <*> pointValueRes                                  --instructorAssignUpdatePointValue :: Maybe Int
+                             <*> problemCountRes                                --instructorAssignUpdateProblemCount :: Maybe Int
+                             <*> descRes                                        --instructorAssignUpdateDescription :: Maybe Textarea
+                             <*> passRes                                        --instructorAssignUpdatePassword :: Maybe Text
+                             <*> hiddRes                                        --instructorAssignUpdateHidden :: Maybe Bool
+                             <*> limitRes                                       --instructorAssignUpdateTimeLimit :: Maybe Int
+            let widget = [whamlet|
                 #{extra}
                 ^{fvInput assignmentView}
                 <h6> Due Date
@@ -808,8 +806,7 @@ setBookAssignmentForm classes extra = do
             (dueRes, dueView) <- mreq (jqueryDayField def) (withPlaceholder "Date" $ bfs ("Due Date"::Text)) Nothing
             (duetimeRes, duetimeView) <- mopt timeFieldTypeTime (withPlaceholder "Time" $ bfs ("Due Time"::Text)) Nothing
             let theRes = (,,,) <$> classRes <*> probRes <*> dueRes <*> duetimeRes
-            let widget = do
-                [whamlet|
+            let widget = [whamlet|
                 #{extra}
                 <h6>Assign to
                 <div.row>
@@ -848,14 +845,14 @@ updateOldCourseModal = genericModal "OldCourse" "Update Course Data"
 
 data UpdateCourse
     = UpdateCourse
-      { ucCourseId :: Text
-      , ucDesc :: Maybe Textarea
-      , ucStartDay :: Maybe Day
-      , ucEndDay :: Maybe Day
-      , ucPoints :: Maybe Int
+      { ucCourseId  :: Text
+      , ucDesc      :: Maybe Textarea
+      , ucStartDay  :: Maybe Day
+      , ucEndDay    :: Maybe Day
+      , ucPoints    :: Maybe Int
       , ucEnrolOpen :: Maybe Bool
-      , ucTextbook :: Maybe (Key AssignmentMetadata)
-      , ucLtiId :: Maybe Text
+      , ucTextbook  :: Maybe (Key AssignmentMetadata)
+      , ucLtiId     :: Maybe Text
       }
 
 updateCourseForm
@@ -871,9 +868,6 @@ updateCourseForm mcourseent mautoreg asmd = renderBootstrap3 BootstrapBasicForm 
             <*> aopt (selectField assignmentlist) textbookFieldSettings (maybe Nothing (Just . Just) mtext)
             <*> aopt textField (bfs ("LTI Autoregistration ID" :: Text)) (Just mautoregId)
     where courseId = hiddenField
-          textbookfield = case mcourse of 
-                        Nothing -> hiddenField
-                        Just _ -> (selectField assignmentlist)
           mcourse = entityVal <$> mcourseent
           mtext = mcourse >>= courseTextBook
           mdesc = mcourse >>= courseDescription
@@ -888,21 +882,21 @@ updateCourseForm mcourseent mautoreg asmd = renderBootstrap3 BootstrapBasicForm 
           assignmentlist = pure $ OptionList assignments (readMaybe . unpack)
           assignments = map toAssignmentOption asmd
           toAssignmentOption (Entity k a) = Option (assignmentMetadataTitle a) k (pack . show $ k)
-          textbookFieldSettings = case mcourse of 
+          textbookFieldSettings = case mcourse of
             Just _ -> (bfs ("Textbook for Course" :: Text))
-            Nothing -> FieldSettings 
+            Nothing -> FieldSettings
                 { fsLabel = ""
                 , fsTooltip = Nothing
                 , fsId = Nothing
                 , fsName = Nothing
-                , fsAttrs = [("style","display:none")] 
+                , fsAttrs = [("style","display:none")]
                 }
-          checkFieldSettings = FieldSettings 
+          checkFieldSettings = FieldSettings
             { fsLabel = maybe "" (const "Enrollment Open?") mcourse
             , fsTooltip = Nothing
             , fsId = Nothing
             , fsName = Nothing
-            , fsAttrs = maybe [("style","display:none")] (const [("style","margin-left:10px")]) mcourse 
+            , fsAttrs = maybe [("style","display:none")] (const [("style","margin-left:10px")]) mcourse
             }
 
 createAPIKeyForm :: Markup -> MForm (HandlerFor App) (FormResult (), WidgetFor App ())
@@ -1175,15 +1169,6 @@ dateDisplay inUtc course = case tzByName $ courseTimeZone course of
 
 maybeDo :: Monad m => Maybe t -> (t -> m ()) -> m ()
 maybeDo mv f = case mv of Just v -> f v; _ -> return ()
-
-sanitizeForJS :: String -> String
-sanitizeForJS ('\n':xs) = '\\' : 'n' : sanitizeForJS xs
-sanitizeForJS ('\\':xs) = '\\' : '\\' : sanitizeForJS xs
-sanitizeForJS ('\'':xs) = '\\' : '\'' : sanitizeForJS xs
-sanitizeForJS ('"':xs)  = '\\' : '"' : sanitizeForJS xs
-sanitizeForJS ('\r':xs) = sanitizeForJS xs
-sanitizeForJS (x:xs) = x : sanitizeForJS xs
-sanitizeForJS [] = []
 
 -- TODO compare directory contents with database results
 listAssignmentMetadata
