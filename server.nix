@@ -81,7 +81,7 @@ newpkgs: oldpkgs: {
         cp ${client.out}/bin/AllActions.jsexe/lib.js static/ghcjs/allactions/
         cp ${client.out}/bin/AllActions.jsexe/runmain.js static/ghcjs/allactions/
         echo ":: Adding a universal settings file"
-        cp config/settings-example.yml config/settings.yml
+        cp -n config/settings-example.yml config/settings.yml
         cp -r {config,static} $out/share
         cat config/settings.yml
         '';
